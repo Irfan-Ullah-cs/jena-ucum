@@ -137,7 +137,9 @@ length.sameValueAs(same); // true
 ## References
 
 - Lefrançois & Zimmermann (2016) — [Supporting Arbitrary Custom Datatypes in RDF and SPARQL](https://www.emse.fr/~zimmermann/Papers/eswc2016.pdf), ESWC 2016
-- Lefrançois & Zimmermann (2018) — [The cdt:ucum Datatype](https://hal-emse.ccsd.cnrs.fr/emse-01883261/document)
+- Lefrançois & Zimmermann (2018) — [The The Unified Code for Units of Measure in RDF:
+cdt:ucum and other UCUM Datatypes
+](https://2018.eswc-conferences.org/files/posters-demos/paper_293.pdf)
 - [Original jena-ucum implementation](https://github.com/OpenSensingCity/jena-ucum) — OpenSensingCity (Jena 3.6.0 fork)
 - [UCUM Specification](https://ucum.org/ucum)
 - [cdt:ucum namespace](https://w3id.org/cdt/)
