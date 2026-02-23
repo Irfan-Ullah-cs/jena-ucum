@@ -1,4 +1,4 @@
-# jena-ucum-lib
+# jena-ucum
 
 A standalone library that adds [UCUM](https://ucum.org/) quantity datatypes to [Apache Jena](https://jena.apache.org/) 5.x via its public extension points.
 
