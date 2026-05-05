@@ -53,31 +53,31 @@ ORDER BY cdt:toSI(?h)
 
 ```
 jena-ucum-lib/
-├── pom.xml
-├── src/main/
-│   ├── resources/META-INF/services/
-│   │   └── org.apache.jena.sys.JenaSubsystemLifecycle   ← Auto-discovery
-│   └── java/org/lindt/ucum/
-│       ├── UCUMSubsystem.java          ← ServiceLoader entry point
-│       ├── UCUMConfig.java             ← One-time initialization
-│       ├── datatype/
-│       │   ├── CDTDatatype.java        ← Abstract base class
-│       │   └── quantity/
-│       │       ├── QuantityDatatype.java   ← Core parse/unparse/isEqual logic
-│       │       ├── UnitDatatype.java       ← Unit-only literals
-│       │       ├── CDTLength.java          ← 1 of 33 concrete types
-│       │       ├── ...                     ← (31 more)
-│       │       ├── CDTUCUM.java            ← Universal quantity type
-│       │       └── CDTUCUMUnit.java        ← Universal unit type
-│       └── sparql/
-│           ├── QuantityWrapper.java        ← NodeValue ↔ Quantity bridge
-│           ├── UCUMFunctions.java          ← FunctionRegistry registration
-│           └── functions/                  ← 12 SPARQL function implementations
-└── src/test/
-    └── java/org/apache/jena/datatypes/
-        ├── TestQuantityDatatypes.java
-        ├── TestUnitDatatypes.java
-        └── TestSPARQLFunctions.java
+├-- pom.xml
+├-- src/main/
+│   ├-- resources/META-INF/services/
+│   │   └-- org.apache.jena.sys.JenaSubsystemLifecycle   ← Auto-discovery
+│   └-- java/org/lindt/ucum/
+│       ├-- UCUMSubsystem.java          ← ServiceLoader entry point
+│       ├-- UCUMConfig.java             ← One-time initialization
+│       ├-- datatype/
+│       │   ├-- CDTDatatype.java        ← Abstract base class
+│       │   └-- quantity/
+│       │       ├-- QuantityDatatype.java   ← Core parse/unparse/isEqual logic
+│       │       ├-- UnitDatatype.java       ← Unit-only literals
+│       │       ├-- CDTLength.java          ← 1 of 33 concrete types
+│       │       ├-- ...                     ← (31 more)
+│       │       ├-- CDTUCUM.java            ← Universal quantity type
+│       │       └-- CDTUCUMUnit.java        ← Universal unit type
+│       └-- sparql/
+│           ├-- QuantityWrapper.java        ← NodeValue ↔ Quantity bridge
+│           ├-- UCUMFunctions.java          ← FunctionRegistry registration
+│           └-- functions/                  ← 12 SPARQL function implementations
+└-- src/test/
+    └-- java/org/apache/jena/datatypes/
+        ├-- TestQuantityDatatypes.java
+        ├-- TestUnitDatatypes.java
+        └-- TestSPARQLFunctions.java
 ```
 
 ## How It Works

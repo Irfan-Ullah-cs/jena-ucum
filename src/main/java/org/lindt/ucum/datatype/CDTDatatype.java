@@ -1,7 +1,4 @@
-/*
- * Adapted from the original jena-ucum implementation by Maxime Lefrançois.
- * Moved from org.apache.jena.datatypes.cdt to separate library.
- */
+
 package org.lindt.ucum.datatype;
 
 import org.apache.jena.datatypes.BaseDatatype;

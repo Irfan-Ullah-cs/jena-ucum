@@ -1,13 +1,4 @@
-/*
- * Adapted from the original jena-ucum implementation by Maxime Lefrançois.
- * Moved from org.apache.jena.datatypes.cdt.quantity to separate library.
- *
- * CHANGES from original:
- *   - Package: org.apache.jena.datatypes.cdt.quantity → org.lindt.ucum.datatype
- *   - tec.uom.se.quantity.Quantities → tech.units.indriya.quantity.Quantities
- *   - systems.uom.ucum.internal.format.TokenException → removed
- *   - javax.measure.format.ParserException → javax.measure.format.MeasurementParseException
- */
+
 package org.lindt.ucum.datatype.quantity; 
 
 

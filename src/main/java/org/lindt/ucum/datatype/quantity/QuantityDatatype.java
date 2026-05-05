@@ -1,20 +1,8 @@
-/*
- * Adapted from the original jena-ucum implementation by Maxime Lefrançois.
- * Moved from org.apache.jena.datatypes.cdt.quantity to separate library.
- *
- * CHANGES from original:
- *   - Package: org.apache.jena.datatypes.cdt.quantity → org.lindt.ucum.datatype
- *   - tec.uom.se.quantity.Quantities → tech.units.indriya.quantity.Quantities  (JSR-363 → JSR-385)
- *   - getUnitFormatService() → getFormatService()  (JSR-385 API change)
- *   - systems.uom.ucum.internal.format.TokenException → removed (internal class, catch Exception instead)
- *   - new Double(...) → Double.parseDouble(...)  (deprecated constructor)
- */
 package org.lindt.ucum.datatype.quantity;
 
-import org.apache.jena.datatypes.TypeMapper; 
-import java.util.HashSet;
+import org.apache.jena.datatypes.TypeMapper;
+import java.math.BigDecimal;
 import java.util.Objects;
-import java.util.Set;
 import javax.measure.Quantity;
 import javax.measure.Unit;
 import javax.measure.format.MeasurementParseException;
@@ -26,30 +14,18 @@ import org.lindt.ucum.datatype.CDTDatatype;
 
 import tech.units.indriya.quantity.Quantities;
 
-
-/**
- * NOTE: stored using Double -> 17 significant decimal digits.
- * 
- * @param <Q> the quantity kind for the datatype
- * @author maxime.lefrancois
- */
 public abstract class QuantityDatatype<Q extends Quantity<Q>> extends CDTDatatype {
 
     protected static final UnitFormat unitFormat;
-    
+
     static {
-        // Initialize UCUM case-sensitive format
-        // JSR-385: getFormatService() replaces getUnitFormatService()
-        // "CS" = case-sensitive UCUM format (same name as original)
         UnitFormat fmt;
         try {
             fmt = ServiceProvider.current().getFormatService().getUnitFormat("CS");
         } catch (Exception e) {
-            // Fallback: try default UCUM format name
             try {
                 fmt = ServiceProvider.current().getFormatService().getUnitFormat("UCUM");
             } catch (Exception e2) {
-                // Last resort: use available format
                 fmt = ServiceProvider.current()
                         .getFormatService()
                         .getAvailableFormatNames(javax.measure.spi.FormatService.FormatType.UNIT_FORMAT)
@@ -69,20 +45,11 @@ public abstract class QuantityDatatype<Q extends Quantity<Q>> extends CDTDatatyp
         this.clazz = clazz;
     }
 
-    /**
-     * Returns the java class which is used to represent value instances of this
-     * datatype.
-     */
     @Override
     public Class<?> getJavaClass() {
         return clazz;
     }
 
-    /**
-     * Convert a value of this datatype out to lexical form.
-     * 
-     * @throws IllegalArgumentException if the value is not an instance of Quantity of the specified dimension
-     */
     @Override
     public String unparse(Object value) {
         try {
@@ -94,21 +61,28 @@ public abstract class QuantityDatatype<Q extends Quantity<Q>> extends CDTDatatyp
         }
     }
 
-    /**
-     * Parse a lexical form of this datatype to a value
-     *
-     * @throws DatatypeFormatException if the lexical form is not legal
-     */
     @Override
     public Quantity<Q> parse(String lexicalForm) throws DatatypeFormatException {
+        if (!lexicalForm.equals(lexicalForm.trim())) {
+            throw new DatatypeFormatException(lexicalForm, this, "Lexical form must not have leading or trailing spaces");
+        }
         int index = lexicalForm.indexOf(" ");
         if (index == -1) {
-            throw new DatatypeFormatException(lexicalForm, this, "Lexical form must contain a space");
+            try {
+                final BigDecimal value = new BigDecimal(lexicalForm);
+                @SuppressWarnings("unchecked")
+                final Unit<Q> dimensionless = (Unit<Q>) unitFormat.parse("1");
+                return Quantities.getQuantity(value, dimensionless).asType(clazz);
+            } catch (NumberFormatException e) {
+                throw new DatatypeFormatException(lexicalForm, this, "Not a valid number or quantity");
+            } catch (Exception e) {
+                throw new DatatypeFormatException(lexicalForm, this, "Not a valid quantity: " + e.getMessage());
+            }
         }
         try {
             @SuppressWarnings("unchecked")
             final Unit<Q> unit = (Unit<Q>) unitFormat.parse(lexicalForm.substring(index + 1));
-            final double value = Double.parseDouble(lexicalForm.substring(0, index));
+            final BigDecimal value = new BigDecimal(lexicalForm.substring(0, index));
             return Quantities.getQuantity(value, unit).asType(clazz);
         } catch (MeasurementParseException e) {
             throw new DatatypeFormatException(lexicalForm, this, "Not a valid unit: " + e.getMessage());
@@ -116,12 +90,11 @@ public abstract class QuantityDatatype<Q extends Quantity<Q>> extends CDTDatatyp
             throw new DatatypeFormatException(lexicalForm, this, "Not a valid number: " + e.getMessage());
         } catch (ClassCastException e) {
             throw new DatatypeFormatException(lexicalForm, this, "Not a valid " + clazz.getSimpleName() + " unit: " + e.getMessage());
+        } catch (Exception e) {
+            throw new DatatypeFormatException(lexicalForm, this, "Not a valid unit: " + e.getMessage());
         }
     }
 
-    /**
-     * Compares two instances of quantity literals.
-     */
     @Override
     public boolean isEqual(LiteralLabel value1, LiteralLabel value2) {
         try {
@@ -129,110 +102,28 @@ public abstract class QuantityDatatype<Q extends Quantity<Q>> extends CDTDatatyp
             final Quantity<Q> q2 = parse(value2.getLexicalForm());
             final Quantity<Q> q3 = q2.to(q1.getUnit());
             return Objects.equals(q1.getUnit(), q3.getUnit())
-                    && q1.getValue().doubleValue() == q3.getValue().doubleValue();
+                    && new BigDecimal(q1.getValue().toString())
+                            .compareTo(new BigDecimal(q3.getValue().toString())) == 0;
         } catch (Exception e) {
             return false;
         }
     }
 
-    /**
-     * Compares two instances of quantity literals for ordering.
-     */
     public int compare(LiteralLabel value1, LiteralLabel value2) {
         try {
             final Quantity<Q> q1 = parse(value1.getLexicalForm());
             final Quantity<Q> q2 = parse(value2.getLexicalForm());
             final Quantity<Q> q3 = q2.to(q1.getUnit());
-            return (int) Math.signum(q1.getValue().floatValue() - q3.getValue().floatValue());
+            return new BigDecimal(q1.getValue().toString())
+                    .compareTo(new BigDecimal(q3.getValue().toString()));
         } catch (Exception e) {
-            throw new IllegalArgumentException("Exception while comparing quantity literals " + value1.getLexicalForm() + " and " + value2.getLexicalForm());
+            throw new IllegalArgumentException("Exception while comparing quantity literals "
+                    + value1.getLexicalForm() + " and " + value2.getLexicalForm());
         }
     }
 
-    private static final Set<QuantityDatatype<?>> quantityDT = new HashSet<>();
-    
     public static void loadCDTTypes(TypeMapper tm) {
         tm.registerDatatype(CDTUCUM.theType);
-        
-        tm.registerDatatype(CDTAcceleration.theType);
-        tm.registerDatatype(CDTAmountOfSubstance.theType);
-        tm.registerDatatype(CDTAngle.theType);
-        tm.registerDatatype(CDTArea.theType);
-        tm.registerDatatype(CDTCatalyticActivity.theType);
-        tm.registerDatatype(CDTDimensionless.theType);
-        tm.registerDatatype(CDTElectricCapacitance.theType);
-        tm.registerDatatype(CDTElectricCharge.theType);
-        tm.registerDatatype(CDTElectricConductance.theType);
-        tm.registerDatatype(CDTElectricCurrent.theType);
-        tm.registerDatatype(CDTElectricInductance.theType);
-        tm.registerDatatype(CDTElectricPotential.theType);
-        tm.registerDatatype(CDTElectricResistance.theType);
-        tm.registerDatatype(CDTEnergy.theType);
-        tm.registerDatatype(CDTForce.theType);
-        tm.registerDatatype(CDTFrequency.theType);
-        tm.registerDatatype(CDTIlluminance.theType);
-        tm.registerDatatype(CDTLength.theType);
-        tm.registerDatatype(CDTLuminousFlux.theType);
-        tm.registerDatatype(CDTLuminousIntensity.theType);
-        tm.registerDatatype(CDTMagneticFlux.theType);
-        tm.registerDatatype(CDTMagneticFluxDensity.theType);
-        tm.registerDatatype(CDTMass.theType);
-        tm.registerDatatype(CDTPower.theType);
-        tm.registerDatatype(CDTPressure.theType);
-        tm.registerDatatype(CDTRadiationDoseAbsorbed.theType);
-        tm.registerDatatype(CDTRadiationDoseEffective.theType);
-        tm.registerDatatype(CDTRadioactivity.theType);
-        tm.registerDatatype(CDTSolidAngle.theType);
-        tm.registerDatatype(CDTSpeed.theType);
-        tm.registerDatatype(CDTTemperature.theType);
-        tm.registerDatatype(CDTTime.theType);
-        tm.registerDatatype(CDTVolume.theType);
-        
-        quantityDT.add(CDTAcceleration.theType);
-        quantityDT.add(CDTAmountOfSubstance.theType);
-        quantityDT.add(CDTAngle.theType);
-        quantityDT.add(CDTArea.theType);
-        quantityDT.add(CDTCatalyticActivity.theType);
-        quantityDT.add(CDTDimensionless.theType);
-        quantityDT.add(CDTElectricCapacitance.theType);
-        quantityDT.add(CDTElectricCharge.theType);
-        quantityDT.add(CDTElectricConductance.theType);
-        quantityDT.add(CDTElectricCurrent.theType);
-        quantityDT.add(CDTElectricInductance.theType);
-        quantityDT.add(CDTElectricPotential.theType);
-        quantityDT.add(CDTElectricResistance.theType);
-        quantityDT.add(CDTEnergy.theType);
-        quantityDT.add(CDTForce.theType);
-        quantityDT.add(CDTFrequency.theType);
-        quantityDT.add(CDTIlluminance.theType);
-        quantityDT.add(CDTLength.theType);
-        quantityDT.add(CDTLuminousFlux.theType);
-        quantityDT.add(CDTLuminousIntensity.theType);
-        quantityDT.add(CDTMagneticFlux.theType);
-        quantityDT.add(CDTMagneticFluxDensity.theType);
-        quantityDT.add(CDTMass.theType);
-        quantityDT.add(CDTPower.theType);
-        quantityDT.add(CDTPressure.theType);
-        quantityDT.add(CDTRadiationDoseAbsorbed.theType);
-        quantityDT.add(CDTRadiationDoseEffective.theType);
-        quantityDT.add(CDTRadioactivity.theType);
-        quantityDT.add(CDTSolidAngle.theType);
-        quantityDT.add(CDTSpeed.theType);
-        quantityDT.add(CDTTemperature.theType);
-        quantityDT.add(CDTTime.theType);
-        quantityDT.add(CDTVolume.theType);
+        tm.registerDatatype(CDTUCUMUnit.theType);
     }
-        
-    public static QuantityDatatype<?> getMostSuitableQuantityDatatype(Quantity quantity) {
-        for (QuantityDatatype qdt : quantityDT) {
-            try {
-                quantity.asType(qdt.getJavaClass());
-                return qdt;
-            } catch (ClassCastException ex) {
-                continue;
-            }
-        }
-        return CDTUCUM.theType;
-    }
-
 }
