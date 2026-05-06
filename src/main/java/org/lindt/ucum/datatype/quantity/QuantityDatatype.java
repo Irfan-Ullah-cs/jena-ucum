@@ -16,7 +16,7 @@ import tech.units.indriya.quantity.Quantities;
 
 public abstract class QuantityDatatype<Q extends Quantity<Q>> extends CDTDatatype {
 
-    protected static final UnitFormat unitFormat;
+    public static final UnitFormat unitFormat;
 
     static {
         UnitFormat fmt;
