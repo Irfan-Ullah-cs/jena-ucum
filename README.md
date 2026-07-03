@@ -1,6 +1,6 @@
 # jena-ucum
 
-**UCUM custom datatypes for Apache Jena** - unit-aware equality, comparison, arithmetic, and SPARQL support.
+**UCUM custom datatypes for Apache Jena** - unit-aware equality, comparison, and arithmetic in Java, with limited SPARQL support.
 
 [![Java](https://img.shields.io/badge/java-17%2B-blue)](https://www.java.com/)
 [![Jena](https://img.shields.io/badge/jena-5.x-orange)](https://jena.apache.org/)
@@ -8,22 +8,11 @@
 
 ## Overview
 
-Add `jena-ucum` to your classpath and Jena gains the ability to store, compare, sort, and compute with physical quantities both in Java and inside SPARQL queries.
+Add `jena-ucum` to your classpath and Jena gains the ability to store and compare physical quantities. In Java, the `UCUMOperations` class gives you unit-aware equality, comparison, arithmetic, and conversion across mixed units. In SPARQL, only `cdt:sameDimension` is supported as a real extension - arithmetic, ordering, and value-space equality inside `FILTER`/`BIND`/`ORDER BY` do not work the way you'd expect from a fully integrated datatype. See [SPARQL Support](#sparql-support) and [Limitations](#limitations) before relying on this in a query.
 
-A CDT quantity literal looks like `"90 km/h"^^cdt:ucum` - a number, a space, and a UCUM unit code. Under the hood, everything normalizes to SI base units, so `"1 km"` and `"1000 m"` are treated as equal. The full spec is at [ci.mines-stetienne.fr/lindt/v4/custom_datatypes](https://ci.mines-stetienne.fr/lindt/v4/custom_datatypes).
+A CDT quantity literal looks like `"90 km/h"^^cdt:ucum` - a number, a space, and a UCUM unit code. **The original unit is preserved, not normalized.** `"1.5 km"^^cdt:ucum` stays `"1.5 km"` - it is not rewritten to `"1500 m"`. Cross-unit values are still recognized as equal (`"1 km"` and `"1000 m"` compare equal in Java), but the stored lexical form is whatever was written. The full spec is at [ci.mines-stetienne.fr/lindt/v4/custom_datatypes](https://ci.mines-stetienne.fr/lindt/v4/custom_datatypes).
 
-Two datatypes are supported: `cdt:ucum` for quantity literals and `cdt:ucumunit` for bare unit expressions. The library doesn't try to cover every CDT dimension type.
-
-No modifications to Jena source code. It registers through Jena's public extension points: `TypeMapper` for datatypes and `FunctionRegistry` for SPARQL functions.
-
-Unit parsing and conversion runs on:
-
-- **[JSR-385 / unit-api 2.2](https://unitsofmeasurement.github.io/unit-api/)** - standard API for units of measurement
-- **[Indriya 2.2.3](https://github.com/unitsofmeasurement/indriya)** - JSR-385 reference implementation for dimensional analysis, conversion, and arithmetic
-- **[systems-ucum 2.2](https://github.com/unitsofmeasurement/uom-systems)** - UCUM unit definitions
-- **[systems-quantity 2.2](https://github.com/unitsofmeasurement/uom-systems)** - quantity types used alongside systems-ucum
-
-Values are parsed as `BigDecimal`, preserving arbitrary precision for integer-ratio conversions.
+Two datatypes are supported: `cdt:ucum` for quantity literals and `cdt:ucumunit` for bare unit expressions.
 
 ## Installation
 
@@ -62,11 +51,11 @@ Literal b = model.createTypedLiteral("1000 m", ucum);
 a.sameValueAs(b); // true - unit-aware equality
 ```
 
-If the JAR is on the classpath inside a Jena application, `UCUMSubsystem` is picked up automatically via `JenaSystem`. No `init()` call needed.
+If the JAR is on the classpath inside a Jena application, `UCUMSubsystem` is picked up automatically. No `init()` call needed.
 
 ## Java API
 
-`UCUMOperations` is a static utility class for post-query processing, aggregation, and unit conversion outside of SPARQL. One import, everything available.
+`UCUMOperations` is a static utility class for arithmetic, comparison, and conversion outside of SPARQL. One import, everything available.
 
 ```java
 import org.lindt.ucum.UCUMOperations;
@@ -96,34 +85,82 @@ UCUMOperations.sameDimension(lit("1 m"), lit("1 kg"))      // false
 
 Incompatible dimensions throw on `add` and `subtract`. Incompatible units throw on `convert`.
 
+`UCUMOperations.equals()`/`.compare()` are **order-dependent** for certain cross-unit pairs - see [Limitations](#limitations).
+
 ## SPARQL Support
 
-The `cdt:sameDimension` function works in SPARQL `FILTER` and `BIND`:
+Only `cdt:sameDimension` is a real, working SPARQL extension. It can be used in `FILTER` or `BIND`.
 
-```sparql
-PREFIX cdt: <https://w3id.org/cdt/>
-PREFIX ex:  <https://example.org/>
+```java
+Model model = ModelFactory.createDefaultModel();
+Property distance = model.createProperty("https://example.org/distance");
+model.add(model.createResource("https://example.org/s1"), distance, model.createTypedLiteral("1 km", CDTUCUM.theTypeURI));
+model.add(model.createResource("https://example.org/s2"), distance, model.createTypedLiteral("1 kg", CDTUCUM.theTypeURI));
+model.add(model.createResource("https://example.org/s3"), distance, model.createTypedLiteral("500 m", CDTUCUM.theTypeURI));
 
-SELECT ?s WHERE {
-    ?s ex:measurement ?v .
-    FILTER(cdt:sameDimension(?v, "1 m"^^<https://w3id.org/cdt/ucum>))
-}
+Query query = QueryFactory.create("""
+    PREFIX ex: <https://example.org/>
+    PREFIX cdt: <https://w3id.org/cdt/>
+    SELECT ?s WHERE {
+        ?s ex:distance ?d .
+        FILTER(cdt:sameDimension(?d, "1 m"^^<https://w3id.org/cdt/ucum>))
+    }
+""");
 ```
 
-Unit-aware equality works through Jena's `isEqual` contract, so `FILTER(?a = ?b)` matches across units. Both `"1 km"^^cdt:ucum` and `"1000 m"^^cdt:ucum` match `FILTER(?l = "1000 m"^^<https://w3id.org/cdt/ucum>)`.
+```
+?s = ex:s1   (1 km  - same dimension as 1 m)
+?s = ex:s3   (500 m - same dimension as 1 m)
+```
+`ex:s2` (`1 kg`) is correctly excluded.
+
+### `FILTER(?a = ?b)` does not do value-space equality
+
+Do not use this expecting cross-unit matching - it falls back to comparing lexical forms.
+
+```java
+model.add(model.createResource("https://example.org/s1"), distance, model.createTypedLiteral("1 km", CDTUCUM.theTypeURI));
+model.add(model.createResource("https://example.org/s2"), distance, model.createTypedLiteral("1000 m", CDTUCUM.theTypeURI));
+
+Query query = QueryFactory.create("""
+    PREFIX ex: <https://example.org/>
+    SELECT ?s WHERE {
+        ?s ex:distance ?d .
+        FILTER(?d = "1 km"^^<https://w3id.org/cdt/ucum>)
+    }
+""");
+```
+
+```
+?s = ex:s1   (matches - identical lexical form)
+```
+`ex:s2` (`1000 m`, the same physical distance, written differently) does **not** match, despite `UCUMOperations.equals()` correctly treating these two as equal in Java. If you need cross-unit filtering in SPARQL, convert candidates to a common unit before loading them, or post-filter in Java.
+
+Arithmetic, ordering, and `ORDER BY` are similarly unsupported for `cdt:ucum` literals in SPARQL - see [Limitations](#limitations).
 
 ## Limitations
 
-**SPARQL arithmetic and ordering operators don't work on CDT literals.** Use `UCUMOperations` in Java for arithmetic, and `cdt:sameDimension` with `FILTER(?a = ?b)` for filtering.
+**SPARQL arithmetic, ordering, and `ORDER BY` don't work on CDT literals.** Use `UCUMOperations` in Java instead.
 
-**Conversions with non-integer factors have limited precision.** A conversion like `3.6 km/h -> m/s` involves `5/18`, which can't be represented exactly in decimal. The result carries a small artifact:
+**`FILTER(?a = ?b)` does not do value-space equality.** It matches only identical lexical forms - see [SPARQL Support](#sparql-support) above. A query written expecting cross-unit equality will silently return fewer rows than it should, with no error.
+
+**`UCUMOperations.equals()`/`.compare()` are order-dependent for cross-unit conversions with non-terminating decimal factors.** For a pair like `3.6 km/h` and `1 m/s`, one conversion direction is exact while the other isn't - so the same two quantities only compare equal in one argument order:
+
+```java
+UCUMOperations.equals(lit("3.6 km/h"), lit("1 m/s"))   // true
+UCUMOperations.equals(lit("1 m/s"), lit("3.6 km/h"))   // false
+```
+
+This is a known, unresolved defect, kept as a visible failing test rather than hidden.
+
+**Conversions with non-integer factors have limited precision**, for the same reason:
 
 ```java
 UCUMOperations.convert(lit("3.6 km/h"), "m/s")
 // "1.00000000000000000000000000000000008 m/s"^^cdt:ucum
 ```
 
-Conversions with integer-ratio factors are exact: `km <-> m`, `h <-> s`, `kPa <-> Pa`, `MHz <-> Hz`, and so on.
+Confirmed exact conversions: `km <-> m`, `g <-> kg`, `h <-> s`, `min <-> s`, `MHz <-> Hz`, `mV <-> V`, `N <-> kg.m/s2`.
 
 ## Testing
 
@@ -131,7 +168,7 @@ Conversions with integer-ratio factors are exact: `km <-> m`, `h <-> s`, `kPa <-
 mvn test
 ```
 
-The test suite covers parsing and registration (`Test01`), namespace correctness (`Test02`), cross-unit equality (`Test03`), ordering (`Test04`), and `UCUMOperations` (`Test05`).
+180 tests, one intentionally failing (the order-dependency bug above, kept visible rather than hidden).
 
 ## References
 

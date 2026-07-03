@@ -62,13 +62,47 @@ public class Test03_Equality {
         assertTrue(CDTUCUM.theType.isEqual(a, b));
     }
 
+    // Known bug (order-dependent, not a permanent limitation): isEqual(value1, value2)
+    // converts value2 INTO value1's unit internally. m/s -> km/h multiplies by
+    // 18/5 = 3.6 (exact); km/h -> m/s multiplies by 5/18 (non-terminating in
+    // Indriya's internal double-based conversion). Same two quantities, opposite
+    // answers depending on which literal is written first - confirmed via
+    // UCUMOperations.convert() reproducing the raw artifact
+    // ("1.00000000000000000000000000000000008 m/s") in the km/h->m/s direction.
     @Test
-    public void cross_unit_speed() {
+    public void cross_unit_speed_safe_order() {
+        // Converts "1 m/s" -> km/h internally (exact) - passes.
         LiteralLabel a = LiteralLabelFactory.create("3.6 km/h", CDTUCUM.theType);
         LiteralLabel b = LiteralLabelFactory.create("1 m/s", CDTUCUM.theType);
         assertTrue(CDTUCUM.theType.isEqual(a, b));
     }
 
+    @Test
+    public void cross_unit_speed_broken_order() {
+        // Same two quantities as cross_unit_speed_safe_order, arguments swapped.
+        // Converts "3.6 km/h" -> m/s internally (non-terminating) - the mismatch
+        // with the test above IS the bug: isEqual() is not symmetric for this pair.
+        LiteralLabel a = LiteralLabelFactory.create("1 m/s", CDTUCUM.theType);
+        LiteralLabel b = LiteralLabelFactory.create("3.6 km/h", CDTUCUM.theType);
+        assertFalse(CDTUCUM.theType.isEqual(a, b));
+    }
+
+
+
+        @Test
+    public void cross_unit_speed_should_be_symmetric() {
+        // isEqual(a,b) and isEqual(b,a) should always agree - they don't here,
+        // because isEqual() converts the SECOND argument into the FIRST argument's
+        // unit internally, and km/h -> m/s (5/18) loses precision that m/s -> km/h
+        // (3.6, exact) doesn't. Confirmed via DebugConversion.
+        LiteralLabel km_h = LiteralLabelFactory.create("3.6 km/h", CDTUCUM.theType);
+        LiteralLabel m_s = LiteralLabelFactory.create("1 m/s", CDTUCUM.theType);
+
+        boolean forward = CDTUCUM.theType.isEqual(km_h, m_s);
+        boolean backward = CDTUCUM.theType.isEqual(m_s, km_h);
+
+        assertEquals(forward, backward); // FAILS: true != false
+    }
     @Test
     public void cross_unit_temperature_celsius_kelvin() {
         LiteralLabel a = LiteralLabelFactory.create("0 Cel", CDTUCUM.theType);
