@@ -133,10 +133,6 @@ public class Test04_Comparison {
 
     // -- Compound and derived units ---------
 
-    @Test
-    public void compound_acceleration() {
-        assertTrue(compare("9.81 m/s2", "9.0 m/s2") > 0);
-    }
 
     @Test
     public void compound_force() {

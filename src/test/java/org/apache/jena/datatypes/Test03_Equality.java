@@ -49,6 +49,13 @@ public class Test03_Equality {
     }
 
     @Test
+    public void cross_unit_mass() {
+        LiteralLabel a = LiteralLabelFactory.create("70 kg", CDTUCUM.theType);
+        LiteralLabel b = LiteralLabelFactory.create("70000 g", CDTUCUM.theType);
+        assertTrue(CDTUCUM.theType.isEqual(a, b));
+    }
+
+    @Test
     public void cross_unit_pressure() {
         LiteralLabel a = LiteralLabelFactory.create("1 kPa", CDTUCUM.theType);
         LiteralLabel b = LiteralLabelFactory.create("1000 Pa", CDTUCUM.theType);
@@ -59,6 +66,13 @@ public class Test03_Equality {
     public void cross_unit_speed() {
         LiteralLabel a = LiteralLabelFactory.create("3.6 km/h", CDTUCUM.theType);
         LiteralLabel b = LiteralLabelFactory.create("1 m/s", CDTUCUM.theType);
+        assertTrue(CDTUCUM.theType.isEqual(a, b));
+    }
+
+    @Test
+    public void cross_unit_temperature_celsius_kelvin() {
+        LiteralLabel a = LiteralLabelFactory.create("0 Cel", CDTUCUM.theType);
+        LiteralLabel b = LiteralLabelFactory.create("273.15 K", CDTUCUM.theType);
         assertTrue(CDTUCUM.theType.isEqual(a, b));
     }
 
